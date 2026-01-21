@@ -9,8 +9,8 @@
 # -----------------------------
 # Define one or more samples to process. Each sample needs:
 #   - hifi_bam: Path to PacBio HiFi reads BAM file
-#   - cifi_bam: Path to CiFi (Pore-C) reads BAM file
-#   - enzyme: Restriction enzyme used (HindIII or NlaIII)
+#   - cifi_bam: Path to CiFi reads BAM file
+#   - enzyme: Restriction enzyme used (e.g. HindIII)
 #
 # Example with multiple samples:
 #   samples:
@@ -21,7 +21,7 @@
 #     sample_B:
 #       hifi_bam: /data/sample_B/hifi.bam
 #       cifi_bam: /data/sample_B/cifi.bam
-#       enzyme: NlaIII
+#       enzyme: HindIII
 
 samples:
   my_sample:
@@ -35,11 +35,7 @@ samples:
 #
 # enabled: false  - Use 100% of CiFi reads only (default, recommended for production)
 # enabled: true   - Run assemblies at each percentage in the list
-#
-# Dilution is useful for:
-#   - Testing optimal CiFi coverage for scaffolding
-#   - Benchmarking assembly quality vs coverage
-#   - Quick testing with low percentages (e.g., [1, 5, 10])
+
 
 dilution:
   enabled: false
