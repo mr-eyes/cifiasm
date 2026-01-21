@@ -94,8 +94,8 @@ cifi_assembly/
 This workflow uses the following external scripts:
 
 - `scripts/cifi2pe_full_length.py` - Splits CiFi reads at restriction enzyme sites
-  Source: [CiFi2PE](https://github.com/sheinasim-USDA/CiFi2PE) by Sheina Sim (USDA)
+  Source: [CiFi2PE](https://github.com/sheinasim-USDA/CiFi2PE) by Sheina Sim.
 
 - `scripts/calN50.js` - Calculates N50 and assembly statistics (requires k8)
-  Source: [calN50](https://github.com/lh3/calN50) by Heng Li
+  Source: [calN50](https://github.com/lh3/calN50) by Heng Li.
 
