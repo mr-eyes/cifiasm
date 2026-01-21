@@ -1,0 +1,54 @@
+# CiFi Assembly Workflow Configuration
+# =====================================
+# Copy this file to config.yaml and update paths for your data:
+#   cp config.example.yaml config.yaml
+#
+# Then edit config.yaml with your actual file paths.
+
+# Sample definitions (required)
+# -----------------------------
+# Define one or more samples to process. Each sample needs:
+#   - hifi_bam: Path to PacBio HiFi reads BAM file
+#   - cifi_bam: Path to CiFi (Pore-C) reads BAM file
+#   - enzyme: Restriction enzyme used (HindIII or NlaIII)
+#
+# Example with multiple samples:
+#   samples:
+#     sample_A:
+#       hifi_bam: /data/sample_A/hifi.bam
+#       cifi_bam: /data/sample_A/cifi.bam
+#       enzyme: HindIII
+#     sample_B:
+#       hifi_bam: /data/sample_B/hifi.bam
+#       cifi_bam: /data/sample_B/cifi.bam
+#       enzyme: NlaIII
+
+samples:
+  my_sample:
+    hifi_bam: /path/to/hifi_reads.bam
+    cifi_bam: /path/to/cifi_reads.bam
+    enzyme: HindIII
+
+# CiFi dilution settings (optional)
+# ---------------------------------
+# Control whether to test assembly with different CiFi coverage levels.
+#
+# enabled: false  - Use 100% of CiFi reads only (default, recommended for production)
+# enabled: true   - Run assemblies at each percentage in the list
+#
+# Dilution is useful for:
+#   - Testing optimal CiFi coverage for scaffolding
+#   - Benchmarking assembly quality vs coverage
+#   - Quick testing with low percentages (e.g., [1, 5, 10])
+
+dilution:
+  enabled: false
+  percentages: [20, 40, 60, 80, 100]
+
+# External tool paths (required)
+# ------------------------------
+# singularity_cache: Directory where Singularity will cache container images
+#                    Used by the wf-pore-c Nextflow pipeline
+
+tools:
+  singularity_cache: /path/to/singularity/cache
