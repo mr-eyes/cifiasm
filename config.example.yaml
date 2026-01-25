@@ -45,6 +45,14 @@ dilution:
   enabled: false
   percentages: [20, 40, 60, 80, 100]
 
+# Output directory (optional)
+# --------------------------
+# Main directory where all workflow outputs will be written.
+# Default: results/
+# Set to "." to write outputs to the current working directory (legacy behavior)
+
+output_dir: results/
+
 # External tool paths (required)
 # ------------------------------
 # singularity_cache: Directory where Singularity will cache container images

@@ -50,16 +50,26 @@ def get_enzyme(wildcards):
 CIFI2PE_SCRIPT = "scripts/cifi2pe_full_length.py"
 CALN50_JS = "scripts/calN50.js"
 
+# Output directory from config (default: results/)
+OUTPUT_DIR = config.get("output_dir", "results/")
+
 # External tool paths from config
 SINGULARITY_CACHE = config["tools"]["singularity_cache"]
+
+# Helper function to prepend output directory to paths
+def out_path(path):
+    """Prepend output directory to a path if it's not '.'"""
+    if OUTPUT_DIR == ".":
+        return path
+    return f"{OUTPUT_DIR}/{path}".replace("//", "/")
 
 # ---------------- Targets ----------------
 rule all:
     input:
-        expand("cifi/{sample}.{label}.bam", sample=samples_list(), label=FRAC_LABELS),
-        expand("stats/{sample}/{label}/summary.tsv", sample=samples_list(), label=FRAC_LABELS),
-        expand("stats/{sample}/{label}/yahs_summary.tsv", sample=samples_list(), label=FRAC_LABELS),
-        expand("qc_porec/{sample}/{label}/hap{hap}/bams/{sample}.{label}.hap{hap}.cs.bam",
+        expand(out_path("cifi/{sample}.{label}.bam"), sample=samples_list(), label=FRAC_LABELS),
+        expand(out_path("stats/{sample}/{label}/summary.tsv"), sample=samples_list(), label=FRAC_LABELS),
+        expand(out_path("stats/{sample}/{label}/yahs_summary.tsv"), sample=samples_list(), label=FRAC_LABELS),
+        expand(out_path("qc_porec/{sample}/{label}/hap{hap}/bams/{sample}.{label}.hap{hap}.cs.bam"),
                sample=samples_list(), label=FRAC_LABELS, hap=[1, 2]),
 
 # ---------------- Core steps ----------------
@@ -70,7 +80,7 @@ rule hifi_fasta:
     input:
         bam=lambda w: next(s for s in SAMPLES if s["sample"] == w.sample)["hifi_bam"]
     output:
-        fa="hifi/{sample}.hifi.fa"
+        fa=out_path("hifi/{sample}.hifi.fa")
     threads: 8
     resources:
         mem_mb=32000, runtime=4 * 60, slurm_partition="low", slurm_account="publicgrp"
@@ -84,8 +94,8 @@ rule downsample_cifi_bam:
     input:
         bam=lambda w: next(s for s in SAMPLES if s["sample"] == w.sample)["cifi_bam"]
     output:
-        bam="cifi/{sample}.{label}.bam",
-        bai="cifi/{sample}.{label}.bam.bai"
+        bam=out_path("cifi/{sample}.{label}.bam"),
+        bai=out_path("cifi/{sample}.{label}.bam.bai")
     params:
         sarg=lambda w: seeddotfrac_from_label(w.label, 100)
     threads: 4
@@ -107,9 +117,9 @@ rule cifi_fastq_from_downsampled_bam:
     """Extract FASTQ from downsampled CiFi BAM"""
     priority: 200
     input:
-        bam="cifi/{sample}.{label}.bam"
+        bam=out_path("cifi/{sample}.{label}.bam")
     output:
-        fq="cifi/{sample}.{label}.fastq"
+        fq=out_path("cifi/{sample}.{label}.fastq")
     threads: 4
     resources:
         mem_mb=4*1024, runtime=4 * 60, slurm_partition="low", slurm_account="publicgrp"
@@ -121,12 +131,12 @@ rule cifi_fastq_from_downsampled_bam:
 rule cifi2pe_split:
     """CiFi single FASTQ -> HiC-like PE (R1/R2) with restriction enzyme"""
     priority: 400
-    input:  "cifi/{sample}.{label}.fastq"
+    input:  out_path("cifi/{sample}.{label}.fastq")
     output:
-        r1="cifi2pe/{sample}.{label}_HiC_R1.fastq",
-        r2="cifi2pe/{sample}.{label}_HiC_R2.fastq"
+        r1=out_path("cifi2pe/{sample}.{label}_HiC_R1.fastq"),
+        r2=out_path("cifi2pe/{sample}.{label}_HiC_R2.fastq")
     params:
-        out="cifi2pe/{sample}.{label}",
+        out=out_path("cifi2pe/{sample}.{label}"),
         cutter=get_enzyme
     threads: 1
     resources:
@@ -159,9 +169,9 @@ rule gfa2fa:
     """Convert GFA contigs to FASTA (hap1 or hap2)"""
     priority: 600
     input:
-        gfa="asm/{sample}/{label}/{sample}.{label}.asm.hic.hap{hap}.p_ctg.gfa"
+        gfa=out_path("asm/{sample}/{label}/{sample}.{label}.asm.hic.hap{hap}.p_ctg.gfa")
     output:
-        fa="asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa"
+        fa=out_path("asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa")
     threads: 4
     resources:
         mem_mb=32000, runtime=4 * 60, slurm_partition="low", slurm_account="publicgrp"
@@ -172,9 +182,9 @@ rule caln50:
     """Run calN50.js (k8) on each hap FASTA"""
     priority: 700
     input:
-        fa="asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa"
+        fa=out_path("asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa")
     output:
-        n50="stats/{sample}/{label}/hap{hap}.n50.txt"
+        n50=out_path("stats/{sample}/{label}/hap{hap}.n50.txt")
     threads: 1
     resources:
         mem_mb=4000, runtime=30, slurm_partition="low", slurm_account="publicgrp"
@@ -189,10 +199,10 @@ rule summarize_assembly:
     """
     priority: 800
     input:
-        hap1="stats/{sample}/{label}/hap1.n50.txt",
-        hap2="stats/{sample}/{label}/hap2.n50.txt"
+        hap1=out_path("stats/{sample}/{label}/hap1.n50.txt"),
+        hap2=out_path("stats/{sample}/{label}/hap2.n50.txt")
     output:
-        tsv="stats/{sample}/{label}/summary.tsv"
+        tsv=out_path("stats/{sample}/{label}/summary.tsv")
     threads: 1
     resources:
         mem_mb=2000, runtime=10, slurm_partition="low", slurm_account="publicgrp"
@@ -221,22 +231,22 @@ rule porec_nextflow:
     """Run epi2me-labs/wf-pore-c nextflow pipeline for Hi-C contact mapping"""
     priority: 650
     input:
-        cifi_bam="cifi/{sample}.{label}.bam",
-        ref_fa="asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa"
+        cifi_bam=out_path("cifi/{sample}.{label}.bam"),
+        ref_fa=out_path("asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa")
     output:
-        bed="porec/{sample}/{label}/hap{hap}/bed/{sample}.{label}.hap{hap}.bed",
-        pairs="porec/{sample}/{label}/hap{hap}/pairs/{sample}.{label}.hap{hap}.pairs.gz",
-        mcool="porec/{sample}/{label}/hap{hap}/pairs/{sample}.{label}.hap{hap}.mcool",
-        hic="porec/{sample}/{label}/hap{hap}/hi-c/{sample}.{label}.hap{hap}.hic",
-        report="porec/{sample}/{label}/hap{hap}/wf-pore-c-report.html"
+        bed=out_path("porec/{sample}/{label}/hap{hap}/bed/{sample}.{label}.hap{hap}.bed"),
+        pairs=out_path("porec/{sample}/{label}/hap{hap}/pairs/{sample}.{label}.hap{hap}.pairs.gz"),
+        mcool=out_path("porec/{sample}/{label}/hap{hap}/pairs/{sample}.{label}.hap{hap}.mcool"),
+        hic=out_path("porec/{sample}/{label}/hap{hap}/hi-c/{sample}.{label}.hap{hap}.hic"),
+        report=out_path("porec/{sample}/{label}/hap{hap}/wf-pore-c-report.html")
     params:
-        outdir="porec/{sample}/{label}/hap{hap}",
+        outdir=out_path("porec/{sample}/{label}/hap{hap}"),
         sample_alias="{sample}.{label}.hap{hap}",
         cutter=get_enzyme,
         nxf_cache=SINGULARITY_CACHE
     log:
-        nf="porec/{sample}/{label}/logs/{sample}.{label}.hap{hap}.nextflow.log",
-        time="porec/{sample}/{label}/logs/{sample}.{label}.hap{hap}.time.txt"
+        nf=out_path("porec/{sample}/{label}/logs/{sample}.{label}.hap{hap}.nextflow.log"),
+        time=out_path("porec/{sample}/{label}/logs/{sample}.{label}.hap{hap}.time.txt")
     threads: 16
     resources:
         mem_mb= 32*1024,
@@ -284,9 +294,9 @@ rule index_fa:
     """Index FASTA files for yahs"""
     priority: 625
     input:
-        fa="asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa"
+        fa=out_path("asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa")
     output:
-        fai="asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa.fai"
+        fai=out_path("asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa.fai")
     threads: 1
     resources:
         mem_mb=8 * 1024, runtime=60, slurm_partition="low", slurm_account="publicgrp"
@@ -298,17 +308,17 @@ rule yahs_scaffold:
     """Scaffold haplotype assemblies with yahs"""
     priority: 750
     input:
-        asm_fa="asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa",
-        asm_fai="asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa.fai",
-        porec_bed="porec/{sample}/{label}/hap{hap}/bed/{sample}.{label}.hap{hap}.bed"
+        asm_fa=out_path("asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa"),
+        asm_fai=out_path("asm/{sample}/{label}/{sample}.{label}.hap{hap}.fa.fai"),
+        porec_bed=out_path("porec/{sample}/{label}/hap{hap}/bed/{sample}.{label}.hap{hap}.bed")
     output:
-        scaffolds="yahs/{sample}/{label}/{sample}.{label}.hap{hap}_scaffolds_final.fa",
-        agp="yahs/{sample}/{label}/{sample}.{label}.hap{hap}_scaffolds_final.agp",
-        bin="yahs/{sample}/{label}/{sample}.{label}.hap{hap}.bin"
+        scaffolds=out_path("yahs/{sample}/{label}/{sample}.{label}.hap{hap}_scaffolds_final.fa"),
+        agp=out_path("yahs/{sample}/{label}/{sample}.{label}.hap{hap}_scaffolds_final.agp"),
+        bin=out_path("yahs/{sample}/{label}/{sample}.{label}.hap{hap}.bin")
     params:
-        prefix="yahs/{sample}/{label}/{sample}.{label}.hap{hap}"
+        prefix=out_path("yahs/{sample}/{label}/{sample}.{label}.hap{hap}")
     log:
-        "yahs/{sample}/{label}/logs/{sample}.{label}.hap{hap}.yahs.log"
+        out_path("yahs/{sample}/{label}/logs/{sample}.{label}.hap{hap}.yahs.log")
     threads: 32
     resources:
         mem_mb=250*1024, runtime=48 * 60, slurm_partition="low", slurm_account=get_account_for_jobs
@@ -328,9 +338,9 @@ rule yahs_caln50:
     """Run calN50.js (k8) on each yahs scaffold FASTA"""
     priority: 850
     input:
-        fa="yahs/{sample}/{label}/{sample}.{label}.hap{hap}_scaffolds_final.fa"
+        fa=out_path("yahs/{sample}/{label}/{sample}.{label}.hap{hap}_scaffolds_final.fa")
     output:
-        n50="stats/{sample}/{label}/yahs_hap{hap}.n50.txt"
+        n50=out_path("stats/{sample}/{label}/yahs_hap{hap}.n50.txt")
     threads: 1
     resources:
         mem_mb=4000, runtime=30, slurm_partition="low", slurm_account="publicgrp"
@@ -346,10 +356,10 @@ rule summarize_yahs:
     """
     priority: 900
     input:
-        hap1="stats/{sample}/{label}/yahs_hap1.n50.txt",
-        hap2="stats/{sample}/{label}/yahs_hap2.n50.txt"
+        hap1=out_path("stats/{sample}/{label}/yahs_hap1.n50.txt"),
+        hap2=out_path("stats/{sample}/{label}/yahs_hap2.n50.txt")
     output:
-        tsv="stats/{sample}/{label}/yahs_summary.tsv"
+        tsv=out_path("stats/{sample}/{label}/yahs_summary.tsv")
     threads: 1
     resources:
         mem_mb=2000, runtime=10, slurm_partition="low", slurm_account="publicgrp"
@@ -377,9 +387,9 @@ rule yahs_index_scaffolds_fa:
     """Index YAHS scaffold FASTA so we can derive chrom.sizes."""
     priority: 740
     input:
-        fa="yahs/{sample}/{label}/{sample}.{label}.hap{hap}_scaffolds_final.fa"
+        fa=out_path("yahs/{sample}/{label}/{sample}.{label}.hap{hap}_scaffolds_final.fa")
     output:
-        fai="yahs/{sample}/{label}/{sample}.{label}.hap{hap}_scaffolds_final.fa.fai"
+        fai=out_path("yahs/{sample}/{label}/{sample}.{label}.hap{hap}_scaffolds_final.fa.fai")
     threads: 1
     resources:
         mem_mb=8*1024, runtime=30, slurm_partition="low", slurm_account=get_account_for_jobs
@@ -390,23 +400,23 @@ rule qc_porec_nextflow:
     """Run epi2me-labs/wf-pore-c nextflow pipeline for Hi-C contact mapping on scaffolds"""
     priority: 650
     input:
-        cifi_bam="cifi/{sample}.{label}.bam",
-        ref_fa="yahs/{sample}/{label}/{sample}.{label}.hap{hap}_scaffolds_final.fa"
+        cifi_bam=out_path("cifi/{sample}.{label}.bam"),
+        ref_fa=out_path("yahs/{sample}/{label}/{sample}.{label}.hap{hap}_scaffolds_final.fa")
     output:
-        bed="qc_porec/{sample}/{label}/hap{hap}/bed/{sample}.{label}.hap{hap}.bed",
-        pairs="qc_porec/{sample}/{label}/hap{hap}/pairs/{sample}.{label}.hap{hap}.pairs.gz",
-        mcool="qc_porec/{sample}/{label}/hap{hap}/pairs/{sample}.{label}.hap{hap}.mcool",
-        hic="qc_porec/{sample}/{label}/hap{hap}/hi-c/{sample}.{label}.hap{hap}.hic",
-        report="qc_porec/{sample}/{label}/hap{hap}/wf-pore-c-report.html",
-        bam="qc_porec/{sample}/{label}/hap{hap}/bams/{sample}.{label}.hap{hap}.cs.bam",
+        bed=out_path("qc_porec/{sample}/{label}/hap{hap}/bed/{sample}.{label}.hap{hap}.bed"),
+        pairs=out_path("qc_porec/{sample}/{label}/hap{hap}/pairs/{sample}.{label}.hap{hap}.pairs.gz"),
+        mcool=out_path("qc_porec/{sample}/{label}/hap{hap}/pairs/{sample}.{label}.hap{hap}.mcool"),
+        hic=out_path("qc_porec/{sample}/{label}/hap{hap}/hi-c/{sample}.{label}.hap{hap}.hic"),
+        report=out_path("qc_porec/{sample}/{label}/hap{hap}/wf-pore-c-report.html"),
+        bam=out_path("qc_porec/{sample}/{label}/hap{hap}/bams/{sample}.{label}.hap{hap}.cs.bam"),
     params:
-        outdir="qc_porec/{sample}/{label}/hap{hap}",
+        outdir=out_path("qc_porec/{sample}/{label}/hap{hap}"),
         sample_alias="{sample}.{label}.hap{hap}",
         cutter=get_enzyme,
         nxf_cache=SINGULARITY_CACHE
     log:
-        nf="qc_porec/{sample}/{label}/logs/{sample}.{label}.hap{hap}.nextflow.log",
-        time="qc_porec/{sample}/{label}/logs/{sample}.{label}.hap{hap}.time.txt"
+        nf=out_path("qc_porec/{sample}/{label}/logs/{sample}.{label}.hap{hap}.nextflow.log"),
+        time=out_path("qc_porec/{sample}/{label}/logs/{sample}.{label}.hap{hap}.time.txt")
     threads: 16
     resources:
         mem_mb= 32*1024,
