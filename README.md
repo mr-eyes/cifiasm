@@ -1,10 +1,10 @@
 # CiFi Assembly Workflow (active development)
 
-A Snakemake pipeline for generating chromosome-scale, phased de novo assemblies using HiFi long reads and CiFi (Long-reads Chromatin Conformation Capture) data.
+A Snakemake pipeline for generating chromosome-scale, phased de novo assemblies using HiFi long reads and CiFi (Long-reads Chromatin Conformation Capture) data, with support for manual curation via Juicebox Assembly Tools (JBAT).
 
 ## Overview
 
-This pipeline takes HiFi and CiFi BAM files as input and produces haplotype-resolved, scaffold-level assemblies with QC metrics and contact maps.
+This pipeline takes HiFi and CiFi reads (BAM or FASTQ) as input and produces haplotype-resolved, scaffold-level assemblies with QC metrics, contact maps, and editable `.hic` files for manual curation in Juicebox.
 
 
 ## Workflow Diagram
@@ -12,17 +12,44 @@ This pipeline takes HiFi and CiFi BAM files as input and produces haplotype-reso
 ![CiFi Assembly Workflow](assets/flowchart.png)
 
 
+## Prerequisites
+
+### Dependencies
+
+Managed via conda (`environment.yaml`). Key tools: snakemake, samtools, hifiasm, gfatools, yahs, k8, nextflow, cifi (PyPI), biopython, numpy, pairix.
+
+### 3D-DNA (required for JBAT)
+
+Included as a git submodule. After cloning this repo:
+
+```bash
+git submodule update --init --recursive
+```
+
+### JuicerTools JAR (required for JBAT)
+
+Download the JuicerTools JAR file:
+
+```bash
+wget https://github.com/aidenlab/JuicerTools/releases/download/v3.0.0/juicer_tools.jar -O juicer_tools.3.0.0.jar
+```
+
+
 ## Configuration
 
-Edit `config.example.yaml` to specify:
+Copy `config.example.yaml` to `config.yaml` and edit:
+
+```bash
+cp config.example.yaml config.yaml
+```
 
 ### Samples
 ```yaml
 samples:
   my_sample:
-    hifi_bam: /path/to/hifi_reads.bam   # PacBio HiFi reads
-    cifi_bam: /path/to/cifi_reads.bam   # CiFi reads
-    enzyme: HindIII                      # Restriction enzyme 
+    hifi_bam: /path/to/hifi_reads.bam      # PacBio HiFi reads
+    cifi: /path/to/cifi_reads.bam           # CiFi reads (BAM or FASTQ/FASTQ.GZ)
+    enzyme: HindIII                         # Restriction enzyme (HindIII, DpnII, NlaIII)
 ```
 
 ### Dilution (optional)
@@ -35,7 +62,35 @@ dilution:
 ### Tool Paths
 ```yaml
 tools:
-  singularity_cache: /path/to/cache  # For Nextflow containers
+  singularity_cache: /path/to/cache         # For Nextflow containers
+  threed_dna: "./3d-dna"                    # Path to 3D-DNA repository
+  juicer_tools_jar: "./juicer_tools.3.0.0.jar"  # Path to JuicerTools JAR
+```
+
+### SLURM (optional)
+```yaml
+slurm:
+  partition: "low"       # SLURM partition name
+  account: "publicgrp"   # SLURM account name
+```
+
+## Running
+
+```bash
+conda activate vole
+
+# Dry run (validate DAG)
+snakemake --dry-run
+
+# Run locally
+snakemake --cores 32
+
+# Run on SLURM cluster
+snakemake --cores 32 --slurm
+
+# Run specific target
+snakemake stats/my_sample/100/summary.tsv         # contig stats only
+snakemake stats/my_sample/100/yahs_summary.tsv    # scaffold stats only
 ```
 
 
@@ -43,39 +98,61 @@ tools:
 
 ```
 cifi_assembly/
+├── qc_cifi/{sample}/
+│   └── qc.pdf                            # CiFi QC report
 ├── hifi/
-│   └── {sample}.hifi.fa              # HiFi reads as FASTA
+│   └── {sample}.hifi.fa                  # HiFi reads as FASTA
 ├── cifi/
-│   └── {sample}.{pct}.bam            # Downsampled CiFi BAM
+│   └── {sample}.{pct}.bam               # Downsampled CiFi BAM
 ├── cifi2pe/
-│   └── {sample}.{pct}_HiC_R*.fastq   # Hi-C-like paired reads
+│   └── {sample}.{pct}_R{1,2}.fastq      # Hi-C-like paired reads
 ├── asm/{sample}/{pct}/
-│   ├── *.hic.hap{1,2}.p_ctg.gfa      # hifiasm contigs (GFA)
-│   └── *.hap{1,2}.fa                 # Contigs (FASTA)
+│   ├── *.hic.hap{1,2}.p_ctg.gfa         # hifiasm contigs (GFA)
+│   └── *.hap{1,2}.fa                    # Contigs (FASTA)
 ├── porec/{sample}/{pct}/hap{1,2}/
-│   ├── *.bed                         # Pore-C contacts
-│   ├── *.pairs.gz                    # Contact pairs
-│   ├── *.mcool                       # Multi-resolution contact matrix
-│   └── *.hic                         # Juicebox-compatible Hi-C file
+│   ├── *.bed                            # Pore-C contacts
+│   ├── *.pairs.gz                       # Contact pairs
+│   ├── *.mcool                          # Multi-resolution contact matrix
+│   └── *.hic                            # Hi-C contact map
 ├── yahs/{sample}/{pct}/
-│   ├── *_scaffolds_final.fa          # Final scaffolds
-│   └── *_scaffolds_final.agp         # Scaffold AGP
+│   ├── *_scaffolds_final.fa             # Final scaffolds
+│   └── *_scaffolds_final.agp            # Scaffold AGP
 ├── qc_porec/{sample}/{pct}/hap{1,2}/
-│   ├── *.hic                         # QC contact map
-│   └── *.cs.bam                      # Aligned CiFi reads
+│   ├── *.hic                            # QC contact map
+│   └── *.cs.bam                         # Aligned CiFi reads
+├── jbat/{sample}/{pct}/hap{1,2}/
+│   ├── *.hic                            # Editable Hi-C map for Juicebox
+│   ├── *.assembly                       # Assembly file for JBAT
+│   └── merged_nodups.txt                # Contact data (3D-DNA format)
 └── stats/{sample}/{pct}/
-    ├── summary.tsv                   # Contig assembly stats
-    └── yahs_summary.tsv              # Scaffold stats
+    ├── summary.tsv                      # Contig assembly stats
+    └── yahs_summary.tsv                 # Scaffold stats
 ```
 
-## Workflow Rules (15 total)
+## Manual Curation with JBAT
+
+After the pipeline completes, use Juicebox Assembly Tools for manual curation:
+
+1. Open `jbat/{sample}/{pct}/hap{hap}/{sample}.{pct}.hap{hap}.hic` in [Juicebox](https://github.com/aidenlab/Juicebox)
+2. Load the `.assembly` file via **Assembly > Import Map Assembly**
+3. Review and correct scaffold joins/orientations
+4. Export the corrected assembly as `{sample}.{pct}.hap{hap}.review.assembly`
+5. Run the post-review rule to generate the final FASTA:
+   ```bash
+   snakemake jbat/{sample}/{pct}/hap{hap}/{sample}.{pct}.hap{hap}.FINAL.fa
+   ```
+
+
+## Workflow Rules
 
 | Rule | Description |
 |------|-------------|
+| `cifi_qc` | QC report on raw CiFi input |
+| `cifi_fastq_to_bam` | Convert CiFi FASTQ to BAM (if needed) |
 | `hifi_fasta` | Convert HiFi BAM to FASTA |
 | `downsample_cifi_bam` | Downsample CiFi reads to target percentage |
 | `cifi_fastq_from_downsampled_bam` | Extract FASTQ from CiFi BAM |
-| `cifi2pe_split` | Split CiFi reads at restriction sites to Hi-C-like PE |
+| `cifi2pe_split` | Digest CiFi reads at restriction sites to Hi-C-like PE |
 | `hifiasm_dual_scaf` | Assemble with hifiasm --dual-scaf |
 | `gfa2fa` | Convert GFA to FASTA |
 | `caln50` | Calculate N50 and other stats |
@@ -87,6 +164,13 @@ cifi_assembly/
 | `summarize_yahs` | Compile scaffold statistics |
 | `yahs_index_scaffolds_fa` | Index scaffold FASTA |
 | `qc_porec_nextflow` | QC by mapping CiFi to scaffolds |
+| `cifi_filter_bam` | Filter paired-end BAM for JBAT |
+| `generate_genome_file` | Generate chromosome sizes file |
+| `bam2pairs` | Convert BAM to pairs format |
+| `pairs_to_mnd` | Convert pairs to merged_nodups.txt |
+| `generate_assembly_file` | Generate .assembly from scaffold FASTA |
+| `jbat_hic` | Generate editable .hic for Juicebox |
+| `jbat_post_review` | Convert curated .assembly back to FASTA |
 
 
 ## Scripts
@@ -99,3 +183,8 @@ This workflow uses the following external scripts:
 - `scripts/calN50.js` - Calculates N50 and assembly statistics (requires k8)
   Source: [calN50](https://github.com/lh3/calN50) by Heng Li.
 
+- [3D-DNA](https://github.com/aidenlab/3d-dna) - Assembly visualization and post-review tools
+  by Aiden Lab.
+
+- [JuicerTools](https://github.com/aidenlab/JuicerTools) - Hi-C file generation
+  by Aiden Lab.
