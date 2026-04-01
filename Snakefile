@@ -61,8 +61,8 @@ CALN50_JS = "scripts/calN50.js"
 
 # External tool paths from config
 SINGULARITY_CACHE = config["tools"]["singularity_cache"]
-THREED_DNA = config["tools"]["threed_dna"]
-JUICER_TOOLS_JAR = config["tools"]["juicer_tools_jar"]
+THREED_DNA = os.path.abspath(config["tools"]["threed_dna"])
+JUICER_TOOLS_JAR = os.path.abspath(config["tools"]["juicer_tools_jar"])
 
 # SLURM settings from config (with sensible defaults)
 SLURM_PARTITION = config.get("slurm", {}).get("partition", "low")
