@@ -9,24 +9,24 @@
 # -----------------------------
 # Define one or more samples to process. Each sample needs:
 #   - hifi_bam: Path to PacBio HiFi reads BAM file
-#   - cifi_bam: Path to CiFi reads BAM file
-#   - enzyme: Restriction enzyme used (e.g. HindIII)
+#   - cifi: Path to CiFi reads (BAM or FASTQ/FASTQ.GZ)
+#   - enzyme: Restriction enzyme used (e.g. HindIII, DpnII, NlaIII)
 #
 # Example with multiple samples:
 #   samples:
 #     sample_A:
 #       hifi_bam: /data/sample_A/hifi.bam
-#       cifi_bam: /data/sample_A/cifi.bam
+#       cifi: /data/sample_A/cifi.bam
 #       enzyme: HindIII
 #     sample_B:
 #       hifi_bam: /data/sample_B/hifi.bam
-#       cifi_bam: /data/sample_B/cifi.bam
+#       cifi: /data/sample_B/cifi.fastq.gz
 #       enzyme: HindIII
 
 samples:
   my_sample:
     hifi_bam: /path/to/hifi_reads.bam
-    cifi_bam: /path/to/cifi_reads.bam
+    cifi: /path/to/cifi_reads.bam
     enzyme: HindIII
 
 # CiFi dilution settings (optional)
@@ -36,23 +36,27 @@ samples:
 # enabled: false  - Use 100% of CiFi reads only (default, recommended for production)
 # enabled: true   - Run assemblies at each percentage in the list
 
-
 dilution:
   enabled: false
   percentages: [20, 40, 60, 80, 100]
 
-# Output directory (optional)
-# --------------------------
-# Main directory where all workflow outputs will be written.
-# Default: results/
-# Set to "." to write outputs to the current working directory (legacy behavior)
-
-output_dir: results/
-
 # External tool paths (required)
 # ------------------------------
-# singularity_cache: Directory where Singularity will cache container images
-#                    Used by the wf-pore-c Nextflow pipeline
+# singularity_cache: Directory for Singularity container images (used by wf-pore-c)
+# threed_dna: Path to 3D-DNA repository (git clone https://github.com/aidenlab/3d-dna.git)
+# juicer_tools_jar: Path to JuicerTools JAR file
+#   Download: https://github.com/aidenlab/JuicerTools/releases/download/v3.0.0/juicer_tools.jar
 
 tools:
   singularity_cache: /path/to/singularity/cache
+  threed_dna: "./3d-dna"
+  juicer_tools_jar: "./juicer_tools.3.0.0.jar"
+
+# SLURM cluster settings (optional)
+# ----------------------------------
+# Configure SLURM partition and account for cluster jobs.
+# Defaults to partition="low" and account="publicgrp" if not specified.
+
+slurm:
+  partition: "low"
+  account: "publicgrp"
