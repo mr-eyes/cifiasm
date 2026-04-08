@@ -67,6 +67,21 @@ tools:
   juicer_tools_jar: "./juicer_tools.3.0.0.jar"  # Path to JuicerTools JAR
 ```
 
+### CiFi toolkit options (optional)
+```yaml
+cifi:
+  qc:
+    num_reads: 0         # reads to sample for QC (0 = all)
+    min_sites: 1         # min enzyme sites to count a read as usable
+  digest:
+    min_fragments: 3     # min fragments per read to keep (-m)
+    min_frag_len: 20     # min fragment length bp (-l)
+    strip_overhang: true # default: strip enzyme overhang from R2
+    gzip: false          # gzip-compress R1/R2 output
+    fast: false          # streaming stats (lower memory)
+```
+See the [cifi toolkit](https://pypi.org/project/cifi/) docs for details. To use a custom restriction site instead of a named enzyme, set `site` + `cut_pos` under the sample entry.
+
 ### SLURM (optional)
 ```yaml
 slurm:
@@ -147,12 +162,12 @@ After the pipeline completes, use Juicebox Assembly Tools for manual curation:
 
 | Rule | Description |
 |------|-------------|
-| `cifi_qc` | QC report on raw CiFi input |
+| `cifi_qc` | QC report on raw CiFi input (via `cifi qc`) |
 | `cifi_fastq_to_bam` | Convert CiFi FASTQ to BAM (if needed) |
 | `hifi_fasta` | Convert HiFi BAM to FASTA |
 | `downsample_cifi_bam` | Downsample CiFi reads to target percentage |
 | `cifi_fastq_from_downsampled_bam` | Extract FASTQ from CiFi BAM |
-| `cifi2pe_split` | Digest CiFi reads at restriction sites to Hi-C-like PE |
+| `cifi2pe_split` | Digest CiFi reads into Hi-C-like PE reads (via `cifi digest`) |
 | `hifiasm_dual_scaf` | Assemble with hifiasm --dual-scaf |
 | `gfa2fa` | Convert GFA to FASTA |
 | `caln50` | Calculate N50 and other stats |
@@ -173,12 +188,13 @@ After the pipeline completes, use Juicebox Assembly Tools for manual curation:
 | `jbat_post_review` | Convert curated .assembly back to FASTA |
 
 
-## Scripts
+## Scripts & external tools
 
-This workflow uses the following external scripts:
+This workflow uses the following external scripts and tools:
 
-- `scripts/cifi2pe_full_length.py` - Splits CiFi reads at restriction enzyme sites
-  Source: [CiFi2PE](https://github.com/sheinasim-USDA/CiFi2PE) by Sheina Sim.
+- [`cifi`](https://pypi.org/project/cifi/) (PyPI) - CiFi QC (`cifi qc`) and in-silico
+  restriction digestion to Hi-C-like paired-end reads (`cifi digest`). Options are
+  configurable under the `cifi:` key in `config.yaml`.
 
 - `scripts/calN50.js` - Calculates N50 and assembly statistics (requires k8)
   Source: [calN50](https://github.com/lh3/calN50) by Heng Li.
