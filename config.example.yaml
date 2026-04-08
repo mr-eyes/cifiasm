@@ -28,6 +28,21 @@ samples:
     hifi_bam: /path/to/hifi_reads.bam
     cifi: /path/to/cifi_reads.bam
     enzyme: HindIII
+    # Optional: custom restriction site instead of a named enzyme.
+    # If set, `site` + `cut_pos` override `enzyme` for cifi qc/digest.
+    # site: "GANTC"    # IUPAC recognition sequence
+    # cut_pos: 1       # 0-based cut position within the site
+
+cifi:
+  qc:
+    num_reads: 0
+    min_sites: 1
+  digest:
+    min_fragments: 3
+    min_frag_len: 20
+    strip_overhang: true
+    gzip: false
+    fast: false
 
 # CiFi dilution settings (optional)
 # ---------------------------------

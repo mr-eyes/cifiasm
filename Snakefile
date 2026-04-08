@@ -32,7 +32,9 @@ for sample_name, sample_data in config["samples"].items():
         sample=sample_name,
         hifi_bam=sample_data["hifi_bam"],
         cifi_input=cifi_path,
-        enzyme=sample_data["enzyme"]
+        enzyme=sample_data.get("enzyme", ""),
+        site=sample_data.get("site", ""),
+        cut_pos=sample_data.get("cut_pos", ""),
     ))
 
 def samples_list():
@@ -43,6 +45,24 @@ def get_sample_data(sample_name):
 
 def get_enzyme(wildcards):
     return get_sample_data(wildcards.sample)["enzyme"]
+
+def get_enzyme_args(wildcards):
+    """Return enzyme CLI args: either '-e NAME' or '--site SEQ --cut-pos N'."""
+    data = get_sample_data(wildcards.sample)
+    if data.get("site"):
+        return f"--site {data['site']} --cut-pos {data['cut_pos']}"
+    return f"-e {data['enzyme']}"
+
+def get_digest_extra_flags():
+    """Build extra CLI flags for cifi digest from config."""
+    flags = []
+    if not CIFI_DIGEST_OPTS.get("strip_overhang", True):
+        flags.append("--revcomp-r2")
+    if CIFI_DIGEST_OPTS.get("gzip", False):
+        flags.append("--gzip")
+    if CIFI_DIGEST_OPTS.get("fast", False):
+        flags.append("--fast")
+    return " ".join(flags)
 
 def cifi_is_fastq(sample_name):
     """Check if CiFi input is FASTQ (not BAM) based on file extension."""
@@ -56,8 +76,11 @@ def get_cifi_bam(wildcards):
     return get_sample_data(wildcards.sample)["cifi_input"]
 
 # Script paths (relative to workflow)
-CIFI2PE_SCRIPT = "scripts/cifi2pe_full_length.py"
 CALN50_JS = "scripts/calN50.js"
+
+# CiFi toolkit options from config (with defaults matching cifi CLI defaults)
+CIFI_QC_OPTS = config.get("cifi", {}).get("qc", {})
+CIFI_DIGEST_OPTS = config.get("cifi", {}).get("digest", {})
 
 # External tool paths from config
 SINGULARITY_CACHE = config["tools"]["singularity_cache"]
@@ -94,12 +117,15 @@ rule cifi_qc:
         pdf="qc_cifi/{sample}/qc.pdf"
     params:
         outdir="qc_cifi/{sample}",
-        enzyme=get_enzyme
+        enzyme_args=get_enzyme_args,
+        num_reads=CIFI_QC_OPTS.get("num_reads", 0),
+        min_sites=CIFI_QC_OPTS.get("min_sites", 1),
     threads: 1
     resources:
         mem_mb=8000, runtime=4 * 60, slurm_partition=SLURM_PARTITION, slurm_account=SLURM_ACCOUNT
     shell:
-        "cifi qc {input.cifi} -o {params.outdir} -e {params.enzyme} -n 0 --min-sites 1"
+        "cifi qc {input.cifi} -o {params.outdir} {params.enzyme_args} "
+        "-n {params.num_reads} --min-sites {params.min_sites}"
 
 rule cifi_fastq_to_bam:
     """Convert CiFi FASTQ/FASTQ.GZ to unmapped BAM (only runs when input is FASTQ)"""
@@ -177,13 +203,16 @@ rule cifi2pe_split:
         r2="cifi2pe/{sample}.{label}_R2.fastq"
     params:
         out="cifi2pe/{sample}.{label}",
-        cutter=get_enzyme,
-        min_sites=1
+        enzyme_args=get_enzyme_args,
+        min_frags=CIFI_DIGEST_OPTS.get("min_fragments", 3),
+        min_frag_len=CIFI_DIGEST_OPTS.get("min_frag_len", 20),
+        extra=get_digest_extra_flags(),
     threads: 1
     resources:
         mem_mb=16000, runtime=12 * 60, slurm_partition=SLURM_PARTITION, slurm_account=SLURM_ACCOUNT
     shell:
-        "cifi digest {input} -e {params.cutter} -o {params.out} -m {params.min_sites}"
+        "cifi digest {input} {params.enzyme_args} -o {params.out} "
+        "-m {params.min_frags} -l {params.min_frag_len} {params.extra}"
 
 rule hifiasm_dual_scaf:
     """Assemble with hifiasm --dual-scaf (produces hap1/2 ctg GFAs)"""
